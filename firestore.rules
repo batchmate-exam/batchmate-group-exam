@@ -1,0 +1,36 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+    function isAdmin() {
+      return signedIn()
+        && request.auth.uid == "VUDpdiEAeKbTTEVawKjzgZqp3582";
+    }
+    function rosterMatches() {
+      return exists(/databases/$(database)/documents/students/$(request.resource.data.roll))
+        && get(/databases/$(database)/documents/students/$(request.resource.data.roll)).data.name == request.resource.data.name
+        && get(/databases/$(database)/documents/students/$(request.resource.data.roll)).data.active == true;
+    }
+    match /students/{roll} {
+      allow read, write: if isAdmin();
+    }
+    match /exams/{examId} {
+      allow read: if signedIn() && (resource.data.published == true || isAdmin());
+      allow create, update, delete: if isAdmin();
+    }
+    match /answerKeys/{examId} {
+      allow read, write: if isAdmin();
+    }
+    match /attempts/{attemptId} {
+      allow create: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'uid','name','roll','examId','examTitle','answers','submittedAt','status'
+        ])
+        && request.resource.data.status == 'submitted'
+        && rosterMatches();
+      allow read: if isAdmin();
+      allow update, delete: if isAdmin();
+    }
+  }
+}
